@@ -6,11 +6,10 @@ from sentence_transformers import SentenceTransformer
 import faiss
 import numpy as np
 
-# ---------- STEP 1: MEAL LOGGING UI ---------- #
+# ---------------- STEP 1: MEAL LOGGING UI ---------------- #
 
 LOG_FILE = "daily_meal_logs.csv"
 
-# Load or create log file
 if os.path.exists(LOG_FILE):
     meal_df = pd.read_csv(LOG_FILE)
 else:
@@ -48,7 +47,7 @@ if st.button("Clear Today’s Logs"):
     st.success("Today's logs cleared.")
     st.rerun()
 
-# ---------- STEP 2: LOAD NUTRITION DATA ---------- #
+# ---------------- STEP 2: LOAD NUTRITION DATA ---------------- #
 
 @st.cache_data
 def load_nutrition_data():
@@ -63,7 +62,7 @@ st.sidebar.title("📊 Nutrition DB Preview")
 if st.sidebar.checkbox("Show Indian Nutrition Table"):
     st.sidebar.dataframe(nutrition_df.head(20))
 
-# ---------- STEP 3: EMBEDDING + FAISS SEARCH ---------- #
+# ---------------- STEP 3: EMBEDDING + FAISS SEARCH ---------------- #
 
 @st.cache_resource
 def load_embedder_and_faiss(nutrition_df):
@@ -83,9 +82,51 @@ def find_closest_food(query):
     closest = food_list[I[0][0]]
     return closest
 
-# ----------- TEST UI FOR MATCHING (Optional) ----------- #
+# Optional test tool
 st.subheader("🔍 Test Food Matching")
-test_query = st.text_input("Enter a food to match with nutrition data (test only):")
+test_query = st.text_input("Try matching a food name (optional test):")
 if test_query:
     match = find_closest_food(test_query.lower())
     st.success(f"Closest match in DB: **{match}**")
+
+# ---------------- STEP 4: NUTRIENT CALCULATION ---------------- #
+
+st.subheader("🧮 Daily Nutrient Summary")
+
+nutrients = [
+    "calories_(kcal)", "protein_(g)", "carbohydrates_(g)", "fats_(g)",
+    "free_sugar_(g)", "fibre_(g)", "vitamin_c_(mg)", "iron_(mg)", "calcium_(mg)"
+]
+
+def get_nutrients(dish_name):
+    row = nutrition_df[nutrition_df["dish_name"] == dish_name]
+    if not row.empty:
+        values = row[nutrients].values[0]
+        serving = row["estimated_serving_size_(g/ml)"].values[0]
+        scaled = (serving / 100) * values
+        return scaled
+    else:
+        return np.zeros(len(nutrients))
+
+total_nutrients = np.zeros(len(nutrients))
+matched_dishes = []
+
+for entry in today_logs["Entry"]:
+    possible_dishes = entry.lower().split(" and ")
+    for dish in possible_dishes:
+        matched = find_closest_food(dish.strip())
+        matched_dishes.append(matched)
+        total_nutrients += get_nutrients(matched)
+
+if total_nutrients.sum() > 0:
+    results = pd.DataFrame({
+        "Nutrient": [n.replace("_", " ").title() for n in nutrients],
+        "Total Intake": total_nutrients.round(2)
+    })
+    st.dataframe(results)
+
+    st.info("Matched dishes from today's log:")
+    for d in matched_dishes:
+        st.markdown(f"✔️ {d}")
+else:
+    st.warning("No nutrients calculated yet. Add some food logs above.")
