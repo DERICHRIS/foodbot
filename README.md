@@ -1,3 +1,8 @@
+foodbot
+vxaq iyop myyu ynbf
+
+
+
 ✅ Step-by-Step Build Plan
 🔹Step 1: Build Streamlit UI to log meals
 Simple input box: "What did you eat today?"
